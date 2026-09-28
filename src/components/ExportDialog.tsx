@@ -12,6 +12,7 @@ export default function ExportDialog() {
   const [fmt, setFmt] = useState<'webm' | 'mp4'>('webm');
   const [gpu, setGpu] = useState<{ ok: boolean; hardwarePreferred: boolean } | null>(null);
   const [watermark, setWatermark] = useState(false);
+  const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const aspect = useEditor((s) => s.aspect);
   useEffect(() => {
     if (!open || fmt !== 'mp4') return;
@@ -85,13 +86,17 @@ export default function ExportDialog() {
     // MP4: GPU hardware encode first (direct MP4, no transcode), CPU fallback after.
     if (fmt === 'mp4') {
       try {
-        const { supportsGpuEncode, captureMp4Gpu } = await import('../engine/gpuExport');
+        const { supportsGpuEncode, captureMp4Gpu, captureMp4GpuFast } = await import('../engine/gpuExport');
         const { w, h } = exportSize(res, useEditor.getState().aspect);
         const sup = await supportsGpuEncode(w, h, bitrateFor(res));
         if (sup.ok) {
-          setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Capturing (GPU${sup.hardwarePreferred ? ', hardware' : ''})…` } : j));
-          const out = await captureMp4Gpu(tot, w, h, bitrateFor(res), (p, fps) =>
-            setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU · ${fps.toFixed(0)} fps)…` } : j)), watermark);
+          const fast = speed > 1;
+          setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Capturing (GPU${sup.hardwarePreferred ? ', hardware' : ''}${fast ? ` · ${speed}x fast` : ''})…` } : j));
+          const out = fast
+            ? await captureMp4GpuFast(tot, w, h, bitrateFor(res), speed as 2 | 4, (p, fps) =>
+                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU ${speed}x · ${fps.toFixed(0)} fps)…` } : j)), watermark)
+            : await captureMp4Gpu(tot, w, h, bitrateFor(res), (p, fps) =>
+                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU · ${fps.toFixed(0)} fps)…` } : j)), watermark);
           const url = URL.createObjectURL(out.blob);
           setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Complete · ${(out.blob.size / 1048576).toFixed(1)} MB · ${out.engine} · ${out.encodeFps.toFixed(0)} fps`, progress: 100, url } : j));
           autoDownload(url, name);
@@ -144,6 +149,13 @@ export default function ExportDialog() {
                 GPU: {gpu === null ? 'probing encoder…' : gpu.ok ? (gpu.hardwarePreferred ? '🟢 hardware H.264 available' : '🟡 encoder available (software fallback)') : '🔴 no GPU encoder — CPU fallback'}
               </p>
             )}
+            <div className="flex items-center gap-1 mb-2 text-xs text-gray-400" title="Fast plays the timeline at 2x/4x and renders audio offline — much quicker for long videos">
+              Speed
+              {([1, 2, 4] as const).map((s) => (
+                <button key={s} onClick={() => setSpeed(s)} className={`rounded px-2 py-0.5 font-bold ${speed === s ? 'bg-cyan-400 text-black' : 'bg-[#262a33]'}`}>{s}x</button>
+              ))}
+              <span className="ml-1 text-gray-500">{speed > 1 ? 'fast · audio offline' : 'real-time'}</span>
+            </div>
             <label className="flex items-center gap-2 text-xs text-gray-400 mb-2">
               <input type="checkbox" checked={watermark} onChange={(e) => setWatermark(e.target.checked)} />
               Watermark “CutForge” bottom-right
