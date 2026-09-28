@@ -1,0 +1,7 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+:root { --acc: #8b5cf6; }
+html, body, #root { height: 100%; }
+body { background: #0e1013; color: #d7dbe2; font-size: 13px; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #262a33; border-radius: 6px; }
