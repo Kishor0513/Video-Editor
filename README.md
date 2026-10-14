@@ -2,26 +2,24 @@
 
 CutForge Pro is a browser-based, local-first non-linear video editor. It has a
 multi-track timeline, canvas preview renderer, Web Audio mixing, WebM capture,
-local ffmpeg.wasm MP4 conversion, captions, effects, templates, and portable
-project files.
+GPU WebCodecs MP4 + local ffmpeg.wasm fallback, captions, effects, templates,
+and portable project files.
 
-The editor works without an account or backend. An optional Hono API server adds
-projects, asset storage, authentication, AI integrations, Stripe plan gates,
-and server-side export workflows.
+The editor works without an account or backend.
 
 ## Features
 
-- Multi-track video, audio, text, captions, effects, transitions, filters, and
+- Multi-track video, audio, text, captions, effects, 15 transitions, filters, LUT, and
   adjustments
 - Frame-aware trim, split, move, snapping, ripple closing, undo, and redo
 - Canvas preview and export compositor sharing the same render graph
 - Web Audio mixer with gain, pan, EQ, compression, reverb, and waveform cache
-- WebM export and optional MP4 conversion in the browser
-- 480p, 720p, 1080p, and 4K export presets
+- WebM export and MP4 via GPU WebCodecs (2x/4x fast) with ffmpeg.wasm CPU fallback
+- 480p, 720p, 1080p, and 4K export presets, 30/60fps
 - Demo media pack for creating a reel or YouTube-style project immediately
 - Local autosave, IndexedDB versions, and portable `*.editor.json` files
-- AI provider adapters and background removal with local/mock fallbacks
-- Optional server integrations for accounts, cloud assets, billing, and jobs
+- Transcribe via provider URL with mic/SRT fallback, TTS preview + file, background
+  removal with MediaPipe/chroma fallbacks
 
 ## Requirements
 
@@ -77,48 +75,16 @@ integrations, copy `.env.example` to `.env.local`:
 cp .env.example .env.local
 ```
 
-Available frontend variables are `VITE_API_URL`, `VITE_TRANSCRIBE_URL`,
-`VITE_TTS_URL`, `VITE_SEGMENT_URL`, and `VITE_EXPORT_API`. Vite exposes
+Available frontend variables are `VITE_TRANSCRIBE_URL`, `VITE_TTS_URL`,
+`VITE_SEGMENT_URL`, and `VITE_EXPORT_API` (see `.env.example`). Vite exposes
 `VITE_*` values to browser code, so never put private credentials in them.
-Frontend AI integrations are BYOK or proxy URLs only.
-
-## Optional API server
-
-The server in `server/` is not required for local editing. It is a separate
-Node service and needs its own dependencies and environment file:
-
-```bash
-cd server
-npm install
-cp .env.example .env
-npm run dev
-```
-
-The default API address is <http://localhost:8787>. Set `VITE_API_URL` in the
-frontend `.env.local` to use it:
-
-```bash
-VITE_API_URL=http://localhost:8787
-```
-
-Server commands:
-
-```bash
-npm run dev        # Start with tsx watch
-npm start          # Start without watch mode
-npm run typecheck  # Check server TypeScript
-npm test           # Run server tests
-npm run db:push    # Apply the Drizzle schema to DATABASE_URL
-```
-
-The server environment can connect PostgreSQL, Cloudflare R2, and Stripe. See
-`server/.env.example` for the complete list. Use production credentials and set
-`DEFAULT_PLAN=free` before exposing the API publicly; the example defaults are
-intended for local development.
+Frontend AI integrations are BYOK or proxy URLs only. With no env set the app
+is fully usable: transcribe falls back to mic dictate + SRT/VTT import, TTS to
+speechSynthesis preview, segmentation to chroma key.
 
 ## Production deployment
 
-### Static frontend
+### Static frontend (only target)
 
 Build the frontend and deploy the generated `dist/` directory with any static
 host:
@@ -135,16 +101,8 @@ Build command: npm run build
 Output directory: dist
 ```
 
-Set any required `VITE_*` variables in the host dashboard before building. If
-client-side routes are added later, configure the host to fall back to
-`index.html`.
-
-### API server
-
-Deploy `server/` separately as a Node service or container. Provide its
-database, R2, Stripe, and application URL variables through the host's secret
-manager. The included `server/Dockerfile` can be used as a starting point for
-container deployment.
+Set any required `VITE_*` variables in the host dashboard before building. The
+included `vercel.json` falls back to `index.html`.
 
 The current frontend uses single-threaded ffmpeg.wasm, so special
 `SharedArrayBuffer` COOP/COEP headers are not required. Serve the production
@@ -155,9 +113,8 @@ app over HTTPS so media APIs and browser storage behave consistently.
 ```text
 src/components/   Editor UI and panels
 src/engine/       Timeline operations, rendering, audio, and export
-src/services/     Media, storage, auth, AI, API, and collaboration adapters
+src/services/     Media, storage, AI, and adapter services
 src/state/        Zustand project and UI state
-server/src/       Optional Hono API and worker service
 public/assets/    Bundled demo media
 docs/             Architecture and API notes
 ```

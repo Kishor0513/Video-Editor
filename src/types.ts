@@ -3,7 +3,7 @@ export type ClipType = 'video' | 'image' | 'audio' | 'text' | 'caption' | 'stick
 export interface Effect { id: string; name: string; category: string; params: Record<string, number>; }
 export interface FilterState { br: number; ct: number; st: number; gr: number; sp: number; bl: number; intensity?: number; }
 export interface Keyframe { id: string; dt: number; prop: string; value: number; easing?: string; }
-export interface Transition { type: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light'; duration: number; }
+export interface Transition { type: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light' | 'spin' | 'rgb' | 'swipe' | 'flash' | 'crosszoom'; duration: number; }
 export interface Clip {
   id: string; assetId?: string; type: ClipType;
   startTime: number; duration: number; sourceStart?: number; sourceDuration?: number;

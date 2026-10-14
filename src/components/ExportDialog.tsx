@@ -10,6 +10,7 @@ export default function ExportDialog() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [res, setRes] = useState('720p');
   const [fmt, setFmt] = useState<'webm' | 'mp4'>('webm');
+  const [fps, setFps] = useState<30 | 60>(30);
   const [gpu, setGpu] = useState<{ ok: boolean; hardwarePreferred: boolean } | null>(null);
   const [watermark, setWatermark] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
@@ -20,10 +21,10 @@ export default function ExportDialog() {
     setGpu(null);
     import('../engine/gpuExport').then(({ supportsGpuEncode }) => {
       const { w, h } = exportSize(res, useEditor.getState().aspect);
-      supportsGpuEncode(w, h, bitrateFor(res)).then((g) => { if (live) setGpu(g); }).catch(() => { if (live) setGpu({ ok: false, hardwarePreferred: false }); });
+      supportsGpuEncode(w, h, bitrateFor(res), fps).then((g) => { if (live) setGpu(g); }).catch(() => { if (live) setGpu({ ok: false, hardwarePreferred: false }); });
     }).catch(() => { if (live) setGpu({ ok: false, hardwarePreferred: false }); });
     return () => { live = false; };
-  }, [open, fmt, res, aspect]);
+  }, [open, fmt, res, aspect, fps]);
   const project = useEditor((s) => s.project);
   const bitrateFor = (r: string) => (r === '4K' ? 20000000 : r === '1080p' ? 10000000 : r === '480p' ? 2500000 : 8000000);
   const captureWebM = async (tot: number, id: string): Promise<Blob> => {
@@ -51,7 +52,7 @@ export default function ExportDialog() {
       }
     };
     paint();
-    const tracks: MediaStreamTrack[] = [...cv.captureStream(30).getVideoTracks()];
+    const tracks: MediaStreamTrack[] = [...cv.captureStream(fps).getVideoTracks()];
     mixStream()?.getAudioTracks().forEach((t) => tracks.push(t));
     const mime = pickWebMMime();
     const rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: bitrateFor(res) } : undefined);
@@ -82,21 +83,21 @@ export default function ExportDialog() {
     const tot = totalDuration(project); if (!tot) { alert('Add clips first'); return; }
     const name = `${project.name.replace(/[^\w-]+/g, '_')}.${fmt}`;
     const id = String(Date.now());
-    setJobs((j) => [...j, { id, label: `${project.name} ${res} ${fmt.toUpperCase()} (local)`, status: fmt === 'mp4' ? 'Capturing…' : 'Rendering…', progress: 0, name }]);
+    setJobs((j) => [...j, { id, label: `${project.name} ${res} ${fps}fps ${fmt.toUpperCase()} (local)`, status: fmt === 'mp4' ? 'Capturing…' : 'Rendering…', progress: 0, name }]);
     // MP4: GPU hardware encode first (direct MP4, no transcode), CPU fallback after.
     if (fmt === 'mp4') {
       try {
         const { supportsGpuEncode, captureMp4Gpu, captureMp4GpuFast } = await import('../engine/gpuExport');
         const { w, h } = exportSize(res, useEditor.getState().aspect);
-        const sup = await supportsGpuEncode(w, h, bitrateFor(res));
+        const sup = await supportsGpuEncode(w, h, bitrateFor(res), fps);
         if (sup.ok) {
           const fast = speed > 1;
-          setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Capturing (GPU${sup.hardwarePreferred ? ', hardware' : ''}${fast ? ` · ${speed}x fast` : ''})…` } : j));
+          setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Capturing (GPU${sup.hardwarePreferred ? ', hardware' : ''}${fast ? ` · ${speed}x fast` : ''} · ${fps}fps)…` } : j));
           const out = fast
-            ? await captureMp4GpuFast(tot, w, h, bitrateFor(res), speed as 2 | 4, (p, fps) =>
-                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU ${speed}x · ${fps.toFixed(0)} fps)…` } : j)), watermark)
-            : await captureMp4Gpu(tot, w, h, bitrateFor(res), (p, fps) =>
-                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU · ${fps.toFixed(0)} fps)…` } : j)), watermark);
+            ? await captureMp4GpuFast(tot, w, h, bitrateFor(res), speed as 2 | 4, (p, efps) =>
+                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU ${speed}x · ${efps.toFixed(0)} fps)…` } : j)), watermark, fps)
+            : await captureMp4Gpu(tot, w, h, bitrateFor(res), (p, efps) =>
+                setJobs((js) => js.map((j) => j.id === id ? { ...j, progress: p, status: `Capturing (GPU · ${efps.toFixed(0)} fps)…` } : j)), watermark, fps);
           const url = URL.createObjectURL(out.blob);
           setJobs((js) => js.map((j) => j.id === id ? { ...j, status: `Complete · ${(out.blob.size / 1048576).toFixed(1)} MB · ${out.engine} · ${out.encodeFps.toFixed(0)} fps`, progress: 100, url } : j));
           autoDownload(url, name);
@@ -142,6 +143,9 @@ export default function ExportDialog() {
               <select value={fmt} onChange={(e) => setFmt(e.target.value as 'webm' | 'mp4')} className="bg-[#1d2027] rounded p-1">
                 <option value="webm">WebM (real-time capture)</option><option value="mp4">MP4 (GPU encode → CPU fallback)</option>
               </select>
+              <select value={fps} onChange={(e) => setFps(Number(e.target.value) as 30 | 60)} className="bg-[#1d2027] rounded p-1" title="Output frame rate">
+                <option value={30}>30fps</option><option value={60}>60fps</option>
+              </select>
             </div>
             <p className="text-xs text-gray-400 mb-2">True-resolution render ({exportSize(res, useEditor.getState().aspect).w}×{exportSize(res, useEditor.getState().aspect).h}) · real-time capture ({totalDuration(project).toFixed(0)}s timeline ≈ that long) · ≈{(estimateBytes(res, totalDuration(project)) / 1048576).toFixed(1)} MB. MP4 adds a local ffmpeg transcode after. Keep tab visible. File auto-saves to your Downloads + stays in the queue below.</p>
             {fmt === 'mp4' && (
@@ -169,7 +173,29 @@ export default function ExportDialog() {
                 <div key={j.id} className="text-xs bg-[#1d2027] rounded p-2">
                   <div>{j.label} — {j.status} {j.progress.toFixed(0)}%</div>
                   <div className="h-1 bg-[#262a33] rounded mt-1"><i className="block h-full bg-violet-500" style={{ width: Math.min(100, j.progress) + '%' }} /></div>
-                  {j.url && <a href={j.url} download={j.name} className="text-violet-300 font-bold">⬇ Download {j.name}</a>}
+                  {j.url && (
+                    <div className="flex gap-2 mt-1">
+                      <a href={j.url} download={j.name} className="text-violet-300 font-bold">⬇ Download {j.name}</a>
+                      <button
+                        className="text-cyan-300 font-bold"
+                        onClick={() => {
+                          const cap = `#${project.name.replace(/\s+/g, '')} #video #fyp — made with CutForge (${res} ${fps}fps)`;
+                          try { void navigator.clipboard?.writeText(cap); } catch { /* noop */ }
+                          alert('TikTok caption copied:\n' + cap + '\n\nUpload the downloaded file in TikTok / Reels / Shorts.');
+                        }}
+                      >📋 TikTok caption</button>
+                      {(navigator as unknown as { share?: (d: { title: string; text: string; url: string }) => Promise<void> }).share && j.url && (
+                        <button
+                          className="text-emerald-300 font-bold"
+                          onClick={() => {
+                            const nav = navigator as unknown as { share: (d: { title: string; text: string; url: string }) => Promise<void> };
+                            const shareUrl: string = j.url as string;
+                            nav.share({ title: project.name, text: `Made with CutForge — ${res} ${fps}fps`, url: shareUrl }).catch(() => undefined);
+                          }}
+                        >↗ Share</button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

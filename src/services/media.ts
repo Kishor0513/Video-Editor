@@ -1,5 +1,6 @@
 import { uid } from '../state/projectStore';
 import type { Asset } from '../types';
+import { inferKind } from './security';
 export { waveformPeaks } from './waveform';
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
@@ -7,7 +8,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 
 export async function fileToAsset(file: File): Promise<Asset> {
   const url = URL.createObjectURL(file);
-  const kind: Asset['kind'] = file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image';
+  const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+  if (ext === 'heic' || ext === 'heif') throw new Error('HEIC photo not playable in browsers — convert to JPEG first');
+  if (ext === 'srt' || ext === 'vtt' || ext === 'cube') throw new Error(`.${ext} files go in Caps (SRT/VTT) or FX → LUT (.cube), not the media library`);
+  const kind: Asset['kind'] = inferKind(file) ?? (file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image');
   const base: Asset = { id: uid(), kind, name: file.name, url, duration: 0, width: 0, height: 0, thumb: '' };
   if (kind === 'image') {
     const im = new Image(); im.src = url;

@@ -22,6 +22,7 @@ export async function captureMp4GpuFast(
   speed: 2 | 4,
   onProgress: (pct: number, fps: number) => void,
   watermark = false,
+  outFps = 30,
 ): Promise<GpuResult & { encodeFps: number }> {
   const cv = document.createElement('canvas');
   cv.width = w;
@@ -103,10 +104,10 @@ export async function captureMp4GpuFast(
           g.restore();
         }
         const t = Math.min(elapsed, tot);
-        if (t - lastAdded >= 1 / 30 || t >= tot) {
+        if (t - lastAdded >= 1 / outFps || t >= tot) {
           lastAdded = t;
           framesAdded++;
-          void videoSource.add(t, 1 / 30).catch(() => undefined);
+          void videoSource.add(t, 1 / outFps).catch(() => undefined);
         }
         const fps = framesAdded / Math.max(0.1, (performance.now() - t0) / 1000);
         onProgress(Math.min(99, (t / tot) * 100), fps);
@@ -124,7 +125,7 @@ export async function captureMp4GpuFast(
   const buffer = (output.target as BufferTarget).buffer;
   if (!buffer) throw new Error('GPU mux produced no data');
   const encodeFps = framesAdded / Math.max(0.1, (performance.now() - t0) / 1000);
-  return { blob: new Blob([buffer], { type: 'video/mp4' }), engine: `GPU fast ${speed}x (${hasAudio ? 'AAC' : 'no audio'})`, hasAudio, encodeFps };
+  return { blob: new Blob([buffer], { type: 'video/mp4' }), engine: `GPU fast ${speed}x ${outFps}fps (${hasAudio ? 'AAC' : 'no audio'})`, hasAudio, encodeFps };
 }
 
 /** Render the full audio mix to an AudioBuffer via OfflineAudioContext. */
@@ -166,7 +167,7 @@ async function renderAudioOffline(tot: number): Promise<AudioBuffer | null> {
   return octx.startRendering();
 }
 
-export async function supportsGpuEncode(width: number, height: number, bitrate: number): Promise<GpuSupport> {
+export async function supportsGpuEncode(width: number, height: number, bitrate: number, framerate = 30): Promise<GpuSupport> {
   try {
     if (typeof VideoEncoder === 'undefined') return { ok: false, hardwarePreferred: false };
     const s = await VideoEncoder.isConfigSupported({
@@ -174,7 +175,7 @@ export async function supportsGpuEncode(width: number, height: number, bitrate: 
       width,
       height,
       bitrate,
-      framerate: 30,
+      framerate,
       hardwareAcceleration: 'prefer-hardware',
     } as VideoEncoderConfig);
     if (!s.supported) return { ok: false, hardwarePreferred: false };
@@ -199,6 +200,7 @@ export async function captureMp4Gpu(
   bitrate: number,
   onProgress: (pct: number, encodeFps: number) => void,
   watermark = false,
+  outFps = 30,
 ): Promise<GpuResult & { encodeFps: number }> {
   ensureAudio();
   await audioCtx()?.resume().catch(() => undefined);
@@ -257,10 +259,10 @@ export async function captureMp4Gpu(
           g.restore();
         }
         const t = Math.min(elapsed, tot);
-        if (t - lastAdded >= 1 / 30 || t >= tot) {
+        if (t - lastAdded >= 1 / outFps || t >= tot) {
           lastAdded = t;
           framesAdded++;
-          void videoSource.add(t, 1 / 30).catch(() => undefined);
+          void videoSource.add(t, 1 / outFps).catch(() => undefined);
         }
         const fps = framesAdded / Math.max(0.1, (performance.now() - t0) / 1000);
         onProgress(Math.min(99, (t / tot) * 100), fps);

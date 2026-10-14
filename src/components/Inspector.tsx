@@ -114,7 +114,7 @@ export default function Inspector() {
           <textarea value={c.text ?? ''} onChange={(e) => upd({ text: e.target.value })} className="w-full bg-[#1d2027] rounded p-1" />
           <p className="text-[11px] text-gray-500 font-bold mt-2 mb-1">ANIMATION — CapCut in/out</p>
           <div className="grid grid-cols-5 gap-1 mb-1">
-            {([['none', '🚫'], ['fade', '🌫'], ['pop', '💥'], ['slide', '➡'], ['typewriter', '⌨'], ['bounce', '🏀'], ['zoom', '🔍'], ['blur', '🌫️'], ['neon', '💡']] as const).map(([name, icon]) => (
+            {([['none', '🚫'], ['fade', '🌫'], ['pop', '💥'], ['slide', '➡'], ['typewriter', '⌨'], ['bounce', '🏀'], ['zoom', '🔍'], ['blur', '🌫️'], ['neon', '💡'], ['glitch', '📺'], ['karaoke', '🎤'], ['hormozi', '🔥']] as const).map(([name, icon]) => (
               <button key={name} onClick={() => upd({ anim: name === 'none' ? undefined : name })} title={`${name} animation`}
                 className={`rounded-lg py-1.5 text-[10px] font-bold ${((c.anim ?? 'none') === name) ? 'bg-cyan-400 text-black' : 'bg-[#262a33]'}`}>{icon}<span className="block">{name.slice(0, 4)}</span></button>
             ))}
@@ -196,7 +196,27 @@ export default function Inspector() {
               <input type="range" min={lo} max={hi} value={c.filters?.[k] ?? (k === 'bl' ? 0 : 100)} onChange={(e) => upd({ filters: { br: 100, ct: 100, st: 100, gr: 0, sp: 0, bl: 0, ...(c.filters ?? {}), [k]: Number(e.target.value) } })} className="w-full" />
             </label>
           ))}
+          <div className="grid grid-cols-2 gap-1 mt-1">
+            <button onClick={() => upd({ filters: { br: 103, ct: 112, st: 108, gr: 0, sp: -12, bl: 0 } })} className="bg-[#262a33] rounded px-2 py-1 text-xs" title="Cooler whites">❄ Cool WB</button>
+            <button onClick={() => upd({ filters: { br: 106, ct: 110, st: 118, gr: 0, sp: 18, bl: 0 } })} className="bg-[#262a33] rounded px-2 py-1 text-xs" title="Warmer skin tones">☀ Warm WB</button>
+          </div>
+          <label className="text-xs text-gray-400 mt-1 block">Tint (sepia→cool)
+            <input type="range" min={-30} max={30} value={(c.filters?.sp ?? 0)} onChange={(e) => upd({ filters: { br: 100, ct: 100, st: 100, gr: 0, bl: 0, ...(c.filters ?? {}), sp: Number(e.target.value) } })} className="w-full" />
+          </label>
         </>
+      )}
+      {(c.type === 'video' || c.type === 'image') && (
+        <div className="mt-2 border-t border-[#2c313b] pt-2">
+          <p className="text-[11px] text-gray-500 font-bold mb-1">COLOR WHEEL (quick grade)</p>
+          <div className="flex items-center gap-2">
+            <input type="color" defaultValue="#ff8855" title="Warmth picker → applies warm/cool preset" onChange={(e) => {
+              const v = e.target.value; const warm = parseInt(v.slice(1, 3), 16) > parseInt(v.slice(5, 7), 16);
+              upd({ filters: warm ? { br: 105, ct: 112, st: 125, gr: 0, sp: 16, bl: 0 } : { br: 102, ct: 112, st: 110, gr: 0, sp: -12, bl: 0 } });
+            }} className="w-10 h-8 bg-[#1d2027] rounded" />
+            <button onClick={() => upd({ filters: { br: 100, ct: 100, st: 100, gr: 0, sp: 0, bl: 0 } })} className="bg-[#262a33] rounded px-2 py-1 text-xs">Reset</button>
+            <button onClick={() => upd({ vignette: (c.vignette ?? 0) > 0 ? 0 : 45 })} className="bg-[#262a33] rounded px-2 py-1 text-xs">{(c.vignette ?? 0) > 0 ? '✓ Vignette' : 'Vignette'}</button>
+          </div>
+        </div>
       )}
       {(c.keyframes?.length ?? 0) > 0 && (
         <div className="mt-2 border-t border-[#2c313b] pt-2">
@@ -207,7 +227,7 @@ export default function Inspector() {
               <input type="number" step={0.05} value={k.dt} title="Time (s)" onChange={(e) => upd({ keyframes: c.keyframes!.map((y) => y.id === k.id ? { ...y, dt: Math.max(0, Number(e.target.value)) } : y) })} className="w-14 bg-[#1d2027] rounded p-0.5" />
               <input type="number" step={0.05} value={k.value} title="Value" onChange={(e) => upd({ keyframes: c.keyframes!.map((y) => y.id === k.id ? { ...y, value: Number(e.target.value) } : y) })} className="w-14 bg-[#1d2027] rounded p-0.5" />
               <select value={k.easing ?? 'linear'} onChange={(e) => upd({ keyframes: c.keyframes!.map((y) => y.id === k.id ? { ...y, easing: e.target.value } : y) })} className="bg-[#1d2027] rounded p-0.5">
-                {['linear', 'easeIn', 'easeOut', 'easeInOut'].map((x) => <option key={x}>{x}</option>)}
+                {['linear', 'easeIn', 'easeOut', 'easeInOut', 'easeBack', 'easeBounce', 'smooth'].map((x) => <option key={x}>{x}</option>)}
               </select>
               <button onClick={() => upd({ keyframes: c.keyframes!.filter((y) => y.id !== k.id) })} className="text-red-300 px-1" title="Delete keyframe">×</button>
             </div>

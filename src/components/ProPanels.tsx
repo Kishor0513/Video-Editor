@@ -238,15 +238,16 @@ export function TransitionsPanel() {
   const commit = useEditor((s) => s.commit);
   return (
     <div className="p-2 text-xs">
-      <h4 className="text-gray-400 mb-1">TRANSITIONS — select a video clip</h4>
+      <h4 className="text-gray-400 mb-1">TRANSITIONS — select a video clip (15 incl. trending)</h4>
       <TransitionsGrid applyTrans={(t, dur = 0.5) => {
         if (!selected) { alert('Select a video clip first'); return; }
         commit('Transition', (p) => ({ ...p, tracks: p.tracks.map((tr) => tr.id === selected.trackId ? { ...tr, clips: tr.clips.map((c) => c.id === selected.clipId ? { ...c, transitionIn: { type: t, duration: dur } } : c) } : tr) }));
       }} />
+      <p className="text-[11px] text-gray-500 mt-1">Trending 2026: glitch, zoom, rgb-split, spin, swipe, flash, crosszoom — beat-sync via Caps tab → Split V1 at beats.</p>
     </div>
   );
 }
-const TRANSITIONS: { id: 'fade' | 'dissolve' | 'wipe' | 'slide' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light'; label: string; sw: string }[] = [
+const TRANSITIONS: { id: 'fade' | 'dissolve' | 'wipe' | 'slide' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light' | 'spin' | 'rgb' | 'swipe' | 'flash' | 'crosszoom'; label: string; sw: string }[] = [
   { id: 'fade', label: 'Fade', sw: 'linear-gradient(90deg,#000 0%,#888 100%)' },
   { id: 'dissolve', label: 'Dissolve', sw: 'linear-gradient(90deg,#333 0%,#bbb 50%,#333 100%)' },
   { id: 'wipe', label: 'Wipe', sw: 'linear-gradient(90deg,#22d3ee 0%,#22d3ee 60%,#111 60%)' },
@@ -257,6 +258,11 @@ const TRANSITIONS: { id: 'fade' | 'dissolve' | 'wipe' | 'slide' | 'glitch' | 'zo
   { id: 'circle', label: 'Circle', sw: 'radial-gradient(circle,#22d3ee 0 30%,#111 32%)' },
   { id: 'pixelate', label: 'Pixel', sw: 'repeating-conic-gradient(#f472b6 0 25%,#34d399 0 50%) 0 0/8px 8px' },
   { id: 'light', label: 'Light', sw: 'radial-gradient(circle,#fff 0%,transparent 70%)' },
+  { id: 'spin', label: 'Spin', sw: 'conic-gradient(#f472b6,#22d3ee,#a78bfa,#f472b6)' },
+  { id: 'rgb', label: 'RGB', sw: 'linear-gradient(90deg,#f00 0 33%,#0f0 33% 66%,#00f 66%)' },
+  { id: 'swipe', label: 'Swipe', sw: 'linear-gradient(90deg,#fff 0 8%,#22d3ee 8%)' },
+  { id: 'flash', label: 'Flash', sw: 'radial-gradient(circle,#fff 0%,#666 70%)' },
+  { id: 'crosszoom', label: 'X-Zoom', sw: 'radial-gradient(circle,#ffe45e 0%,#f97316 50%,#111 100%)' },
 ];
 export function StickersPanel() {
   const commit = useEditor((s) => s.commit);
@@ -463,7 +469,7 @@ export function FXPanel() {
     void can;
     patch({ filters: FILTER_VALUES[name] ?? FILTER_VALUES.Vivid });
   }
-  function applyTrans(t: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light', dur = 0.5) { patch({ transitionIn: { type: t, duration: dur } }); }
+  function applyTrans(t: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light' | 'spin' | 'rgb' | 'swipe' | 'flash' | 'crosszoom', dur = 0.5) { patch({ transitionIn: { type: t, duration: dur } }); }
   function addSticker(s: string) {
     commit('Sticker', (p) => {
       const np = { ...p, tracks: p.tracks.map((t) => ({ ...t, clips: [...t.clips] })) };
@@ -541,6 +547,11 @@ export function CaptionsPanel() {
   return (
     <div className="p-2 text-xs space-y-2">
       <h4 className="text-gray-400">CAPTIONS — CapCut style</h4>
+      <p className="text-[11px] text-gray-500" title="Provider status">
+        {(import.meta as unknown as { env?: Record<string, string> }).env?.VITE_TRANSCRIBE_URL
+          ? '● Provider transcribe configured'
+          : '○ No transcribe provider — mic dictate + SRT/VTT import ready'}
+      </p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} className="w-full bg-[#1d2027] rounded p-1 h-20" />
       <div className="bg-[#1d2027] border border-[#2c313b] rounded-lg p-2">
         <p className="font-bold mb-1">WORD-BY-WORD (one pop per word)</p>
@@ -563,6 +574,11 @@ export function CaptionsPanel() {
         <button className="bg-[#262a33] rounded px-2 py-1" onClick={dictate} title="Web Speech API">🎤 Dictate</button>
         <button className="bg-[#262a33] rounded px-2 py-1" onClick={() => void ttsFile()}>Voice file → timeline</button>
         <button className="bg-[#262a33] rounded px-2 py-1" onClick={scanFillers}>Find fillers</button>
+        <label className="bg-[#262a33] rounded px-2 py-1 cursor-pointer" title="Import .srt/.vtt timed captions">⬆ Import SRT/VTT
+          <input type="file" accept=".srt,.vtt" className="hidden" onChange={(e) => void importCaptionsFile(e.target.files?.[0])} />
+        </label>
+        <button className="bg-violet-500 hover:bg-violet-400 text-white rounded px-2 py-1 font-bold" onClick={() => void transcribeSelected()} title="Transcribe selected audio/video via VITE_TRANSCRIBE_URL provider, else mic/Web Speech hint">✨ Transcribe clip</button>
+        <button className="bg-[#262a33] rounded px-2 py-1" onClick={() => void scriptToTimeline()} title="Topic → structured hook/setup/payoff/CTA clips">📝 Script → video</button>
       </div>
       <button className="bg-[#262a33] rounded px-2 py-1" onClick={analyzeBeats}>🎵 Detect beats (selected music)</button>
       <button className="bg-[#262a33] rounded px-2 py-1" onClick={() => void beatSplit()}>✂ Split V1 at beats</button>
@@ -660,6 +676,66 @@ export function CaptionsPanel() {
     const words = text.split(/\s+/).map((w, i) => ({ w: w.replace(/[.,!?]/g, ''), t: i * 0.4, d: 0.4 }));
     const hits = findFillers(words);
     alert(hits.length ? `Filler words: ${hits.map((h) => h.word).join(', ')}` : 'No filler words found.');
+  }
+  async function importCaptionsFile(f?: File) {
+    if (!f) return;
+    const src = await f.text();
+    const { parseSRT, parseVTT } = await import('../services/transcribe');
+    const cues = f.name.toLowerCase().endsWith('.vtt') ? parseVTT(src) : parseSRT(src);
+    if (!cues.length) { alert('No cues found in ' + f.name); return; }
+    setText(cues.map((c) => c.text).join('\n'));
+    commit('Import captions', (p) => {
+      const np = { ...p, tracks: p.tracks.map((t) => ({ ...t, clips: [...t.clips] })) };
+      const tr = np.tracks.find((t) => t.id === firstTextTrack(p).id)!;
+      const t0 = useEditor.getState().currentTime;
+      cues.forEach((q) => {
+        tr.clips.push({ id: uid(), type: 'caption', text: q.text, fontSize: 44, color: '#fff', textAlign: 'center', startTime: t0 + q.start, duration: Math.max(0.3, q.duration), position: { x: 0.5, y: 0.85 }, scale: { x: 1, y: 1 }, rotation: 0, opacity: 1, trackId: tr.id, anim: 'fade' });
+      });
+      return np;
+    });
+  }
+  async function transcribeSelected() {
+    const st = useEditor.getState(); const sel = st.selected;
+    const c = sel ? st.project.tracks.flatMap((t) => t.clips).find((x) => x.id === sel.clipId) : undefined;
+    const a = c?.assetId ? st.assets.find((x) => x.id === c.assetId) : undefined;
+    if (!c || !a) { alert('Select an audio/video clip with media first'); return; }
+    try {
+      const blob = await (await fetch(a.url)).blob();
+      const { transcribeAudioBlob } = await import('../services/transcribe');
+      const r = await transcribeAudioBlob(blob);
+      setText(r.text);
+      commit('Transcribed captions', (p) => {
+        const np = { ...p, tracks: p.tracks.map((t) => ({ ...t, clips: [...t.clips] })) };
+        const tr = np.tracks.find((t) => t.id === firstTextTrack(p).id)!;
+        r.words.slice(0, 120).forEach((wd) => {
+          tr.clips.push({ id: uid(), type: 'caption', text: wd.w, fontSize: 60, color: '#fff', stroke: '#000', strokeW: 6, shadow: 6, textAlign: 'center', startTime: c.startTime + wd.t, duration: wd.d, position: { x: 0.5, y: 0.6 }, scale: { x: 1, y: 1 }, rotation: 0, opacity: 1, trackId: tr.id, anim: 'pop' });
+        });
+        return np;
+      });
+    } catch (e) {
+      alert(String((e as Error).message) + '\n\nFallback: type text above → ✨ Words → timeline, or import SRT/VTT.');
+    }
+  }
+  async function scriptToTimeline() {
+    const topic = prompt('Topic?', text.split('\n')[0] ?? 'Morning routine');
+    if (!topic) return;
+    const { generateScript } = await import('../services/script');
+    const s = generateScript(topic);
+    setText([s.title, ...s.beats.flatMap((b) => b.lines)].join('\n'));
+    commit('Script → video', (p) => {
+      const np = { ...p, tracks: p.tracks.map((t) => ({ ...t, clips: [...t.clips] })) };
+      const tr = np.tracks.find((t) => t.id === firstTextTrack(p).id)!;
+      let t0 = useEditor.getState().currentTime;
+      tr.clips.push({ id: uid(), type: 'text', text: s.title, fontSize: 72, color: '#ffe45e', stroke: '#000', strokeW: 6, shadow: 8, textAlign: 'center', startTime: t0, duration: 2.5, position: { x: 0.5, y: 0.35 }, scale: { x: 1, y: 1 }, rotation: 0, opacity: 1, trackId: tr.id, anim: 'pop' });
+      t0 += 2.5;
+      s.beats.forEach((b) => {
+        b.lines.forEach((ln) => {
+          tr.clips.push({ id: uid(), type: 'text', text: ln, fontSize: 52, color: '#fff', textAlign: 'center', startTime: t0, duration: 2, position: { x: 0.5, y: 0.45 }, scale: { x: 1, y: 1 }, rotation: 0, opacity: 1, trackId: tr.id, anim: 'fade' });
+          t0 += 2;
+        });
+      });
+      return np;
+    });
   }
   function analyzeBeats() {
     const st = useEditor.getState(); const sel = st.selected;
@@ -773,7 +849,7 @@ export function CaptionsPanel() {
     alert(`Reframed to 9:16 with ${samples.length} tracking keyframes.`);
   }
 }
-export function TransitionsGrid({ applyTrans }: { applyTrans: (t: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light', dur?: number) => void }) {
+export function TransitionsGrid({ applyTrans }: { applyTrans: (t: 'fade' | 'wipe' | 'slide' | 'dissolve' | 'glitch' | 'zoom' | 'blur' | 'circle' | 'pixelate' | 'light' | 'spin' | 'rgb' | 'swipe' | 'flash' | 'crosszoom', dur?: number) => void }) {
   const [dur, setDur] = useState(0.5);
   return (
     <div>
@@ -796,17 +872,19 @@ export function TransitionsGrid({ applyTrans }: { applyTrans: (t: 'fade' | 'wipe
 export function TemplatesPanel() {
   const commit = useEditor((s) => s.commit);
   const assets = useEditor((s) => s.assets);
+  const set = useEditor((s) => s.set);
   return (
     <div className="p-2 text-xs space-y-2">
-      <h4 className="text-gray-400">TEMPLATES</h4>
+      <h4 className="text-gray-400">TEMPLATES ({templates.length}) — CapCut style</h4>
       {templates.map((t) => (
-        <button key={t.name} className="w-full bg-[#1d2027] border border-[#2c313b] rounded p-2 text-left" onClick={() => {
+        <button key={t.name} className="w-full bg-[#1d2027] border border-[#2c313b] hover:border-violet-400/60 rounded p-2 text-left" onClick={() => {
           const vids = assets.filter((a) => a.kind === 'video').map((a) => a.id);
-          if (!vids.length) { alert('Import videos first'); return; }
+          if (!vids.length && t.slots.some((s) => s.startsWith('video'))) { alert('Import videos first (Media → Demo works offline)'); return; }
+          set({ aspect: t.aspect });
           commit('Template', (p) => { const np = { ...p, tracks: p.tracks.map((x) => ({ ...x, clips: [...x.clips] })) }; t.build(np, vids); return np; });
-        }}>{t.name}</button>
+        }}><span className="font-bold block">{t.name}</span><span className="text-[10px] text-gray-400">{t.aspect} · {t.slots.join(', ')}</span></button>
       ))}
-      <p className="text-gray-400">Filler scan lives in Caps tab (works on caption text).</p>
+      <p className="text-gray-400">Sets canvas aspect automatically. Filler scan lives in Caps tab.</p>
     </div>
   );
 }

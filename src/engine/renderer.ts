@@ -9,13 +9,21 @@ export const filterString = (f?: FilterState) => {
   if (f.bl > 0) p.push(`blur(${f.bl}px)`);
   return p.length ? p.join(' ') : 'none';
 };
-export type Easing = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+export type Easing = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'easeBack' | 'easeBounce' | 'smooth';
 export const applyEasing = (kind: string | undefined, x: number): number => {
   const t = Math.max(0, Math.min(1, x));
   switch (kind) {
     case 'easeIn': return t * t;
     case 'easeOut': return 1 - (1 - t) * (1 - t);
     case 'easeInOut': return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    case 'easeBack': { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+    case 'easeBounce': {
+      if (t < 1 / 2.75) return 7.5625 * t * t;
+      if (t < 2 / 2.75) { const u = t - 1.5 / 2.75; return 7.5625 * u * u + 0.75; }
+      if (t < 2.5 / 2.75) { const u = t - 2.25 / 2.75; return 7.5625 * u * u + 0.9375; }
+      const u = t - 2.625 / 2.75; return 7.5625 * u * u + 0.984375;
+    }
+    case 'smooth': return t * t * (3 - 2 * t);
     default: return t;
   }
 };

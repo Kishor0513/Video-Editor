@@ -67,6 +67,30 @@ export function drawComposition(project: Project, assets: Asset[], t: number, cv
         const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
         g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+      } else if (type === 'spin') {
+        ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate((1 - p) * Math.PI * 2); ctx.scale(0.5 + 0.5 * p, 0.5 + 0.5 * p); ctx.translate(-W / 2, -H / 2);
+        paintBase(b, 1); ctx.restore();
+      } else if (type === 'rgb') {
+        const off = (1 - p) * W * 0.04;
+        ctx.save(); ctx.globalAlpha = 0.7; ctx.globalCompositeOperation = 'screen';
+        ctx.translate(-off, 0); paintBase(b, 1);
+        ctx.translate(off * 2, 0); paintBase(b, 1);
+        ctx.restore();
+        paintBase(b, p);
+      } else if (type === 'swipe') {
+        const dir = 1;
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W * p, H); ctx.clip();
+        ctx.translate(W * (1 - p) * dir, 0); paintBase(b, 1); ctx.restore();
+        ctx.save(); ctx.globalAlpha = (1 - p) * 0.6; ctx.fillStyle = '#fff'; ctx.fillRect(W * p - 3, 0, 3, H); ctx.restore();
+      } else if (type === 'flash') {
+        paintBase(b, 1);
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - p * 2) * 0.95; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.restore();
+      } else if (type === 'crosszoom') {
+        const s = 1 + (1 - p) * 0.6;
+        ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(s, s); ctx.translate(-W / 2, -H / 2);
+        ctx.globalAlpha = p; paintBase(b, 1); ctx.restore();
+        paintBase(a, (1 - p) * 0.6);
+        paintBase(b, Math.min(1, p + 0.2));
       } else { ctx.save(); if (type === 'wipe') { ctx.beginPath(); ctx.rect(0, 0, W * p, H); ctx.clip(); } else ctx.translate(W * (1 - p), 0); paintBase(b, 1); ctx.restore(); }
     }
   }
@@ -215,6 +239,15 @@ function paintText(ctx: CanvasRenderingContext2D, c: Clip, t: number, W: number,
     const p = Math.max(0, Math.min(1, lt / 0.4));
     dx = (1 - (1 - Math.pow(1 - p, 3))) * -W * 0.25;
     alpha = Math.max(0, Math.min(1, Math.min(lt / 0.2, (c.duration - lt) / 0.25)));
+  } else if (anim === 'glitch') {
+    const p = Math.max(0, Math.min(1, lt / 0.35));
+    dx = (Math.random() - 0.5) * (1 - p) * W * 0.03;
+    scale = 1 + (1 - p) * 0.12;
+    alpha = Math.max(0, Math.min(1, Math.min(lt / 0.08, (c.duration - lt) / 0.2)));
+  } else if (anim === 'karaoke' || anim === 'hormozi') {
+    const p = Math.max(0, Math.min(1, lt / 0.25));
+    scale = 0.7 + 0.3 * (1 - Math.pow(1 - p, 3));
+    alpha = Math.max(0, Math.min(1, Math.min(lt / 0.1, (c.duration - lt) / 0.2)));
   }
   const full = String(c.text ?? '');
   const shown = anim === 'typewriter'
