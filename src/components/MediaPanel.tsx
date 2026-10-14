@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditor, uid, totalDuration, firstVideoTrack, firstAudioTrack, firstTextTrack } from '../state/projectStore';
 import { fileToAsset } from '../services/media';
+import { validateFile } from '../services/security';
+import { track } from '../services/analytics';
 import { FXPanel, CaptionsPanel, TemplatesPanel, AudioPanel, StickersPanel, TransitionsPanel, FiltersPanel, AdjustPanel } from './ProPanels';
 import { DEMO_FILES, fetchDemoFile, buildReel, buildYoutube } from '../services/demo';
 import type { Asset, Clip } from '../types';
@@ -73,30 +75,35 @@ export default function MediaPanel() {
 
   const onFiles = async (files: FileList | File[] | null) => {
     if (!files || [...files].length === 0) return;
-    const { validateFile } = await import('../services/security');
-    const { track } = await import('../services/analytics');
-    setTab('media'); // stay right here on the media tab
-    setQuery(''); // clear filter so the new import is visible
-    const failures: string[] = [];
-    for (const f of [...files] as File[]) {
-      const v = validateFile(f);
-      if (!v.ok) { failures.push(`${f.name}: ${v.reason}`); continue; }
-      // Captions/LUT dropped on Media get routed with guidance instead of a broken asset
-      if (f.name.match(/\.(srt|vtt)$/i)) { failures.push(`${f.name}: SRT/VTT goes in Caps tab → Import SRT/VTT`); continue; }
-      if (f.name.match(/\.cube$/i)) { failures.push(`${f.name}: .cube LUT goes in FX tab → Import + apply LUT`); continue; }
-      setBusy(`Importing ${f.name}…`);
-      try {
-        const a = await fileToAsset(f);
-        addAsset(a);
-        void persistBlob(a.id, f);
-        if (a.name.includes('(codec unsupported)')) failures.push(`${f.name}: added but codec may not play in this browser — try MP4 (H.264) / WebM`);
-        track('media_uploaded', { kind: f.type });
-      } catch (e) { failures.push(`${f.name}: ${String((e as Error).message)}`); }
+    try {
+      setTab('media'); // stay right here on the media tab
+      setQuery(''); // clear filter so the new import is visible
+      const failures: string[] = [];
+      let added = 0;
+      for (const f of [...files] as File[]) {
+        const v = validateFile(f);
+        if (!v.ok) { failures.push(`${f.name}: ${v.reason}`); continue; }
+        // Captions/LUT dropped on Media get routed with guidance instead of a broken asset
+        if (f.name.match(/\.(srt|vtt)$/i)) { failures.push(`${f.name}: SRT/VTT goes in Caps tab → Import SRT/VTT`); continue; }
+        if (f.name.match(/\.cube$/i)) { failures.push(`${f.name}: .cube LUT goes in FX tab → Import + apply LUT`); continue; }
+        setBusy(`Importing ${f.name}…`);
+        try {
+          const a = await fileToAsset(f);
+          addAsset(a);
+          added++;
+          void persistBlob(a.id, f);
+          if (a.name.includes('(codec unsupported)')) failures.push(`${f.name}: added but codec may not play in this browser — try MP4 (H.264) / WebM`);
+          track('media_uploaded', { kind: f.type || 'unknown' });
+        } catch (e) { failures.push(`${f.name}: ${String((e as Error)?.message ?? e)}`); }
+      }
+      setBusy('');
+      if (failures.length) alert('Import results:\n\n' + failures.join('\n') + (added ? `\n\n${added} file(s) added.` : ''));
+      track('clip_added');
+      requestAnimationFrame(() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }));
+    } catch (e) {
+      setBusy('');
+      alert('Import failed unexpectedly: ' + String((e as Error)?.message ?? e) + '\n\nTry a small MP4/JPEG first to isolate the file.');
     }
-    setBusy('');
-    if (failures.length) alert('Some imports need attention:\n\n' + failures.join('\n'));
-    track('clip_added');
-    requestAnimationFrame(() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }));
   };
 
   const removeAsset = async (id: string) => {
@@ -182,7 +189,7 @@ export default function MediaPanel() {
               className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer mb-2 transition-colors ${dragOver ? 'border-violet-400 bg-violet-500/10 text-white' : 'border-[#2c313b] text-gray-400 hover:border-violet-500/50'}`}>
               <div className="text-sm">📼 {busy || 'Import video / image / audio'}</div>
               <div className="text-[11px] opacity-70 mt-0.5">click or drop files here · MP4/MOV/WebM · MP3/WAV/M4A · PNG/JPEG/WebP · stays in your library</div>
-              <input type="file" multiple accept="video/*,.mkv,.mov,.m4v,.3gp,.ts,.m2ts,image/*,.heic,.heif,.avif,.bmp,audio/*,.m4a,.flac,.aiff,.opus,.wma" className="hidden" onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
+              <input type="file" multiple accept="video/*,.mkv,.mov,.m4v,.3gp,.ts,.m2ts,image/*,.heic,.heif,.avif,.bmp,audio/*,.m4a,.flac,.aiff,.opus,.wma" className="hidden" onChange={(e) => { const fl = e.target.files; e.target.value = ''; if (fl?.length) void onFiles(fl).catch((err) => alert('Import failed: ' + String((err as Error)?.message ?? err))); }} />
             </label>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search library…" className="w-full bg-[#1d2027] rounded p-1.5 mb-2 text-xs" aria-label="Search media" />
             {!assets.length && !busy && (
