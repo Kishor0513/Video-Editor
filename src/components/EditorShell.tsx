@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useEditor, totalDuration, timecode } from '../state/projectStore';
+import { safeLSGet, safeLSSet } from '../services/storage';
 import TopBar from './TopBar';
 import MediaPanel from './MediaPanel';
 import Preview from './Preview';
@@ -24,12 +25,12 @@ export default function EditorShell() {
   useEffect(() => {
     let saved: { updatedAt?: string; tracks?: { clips?: unknown[] }[] } | null = null;
     try {
-      const raw = localStorage.getItem('cutforge-autosave');
+      const raw = safeLSGet('cutforge-autosave');
       if (raw) saved = JSON.parse(raw);
     } catch { /* noop */ }
     const clips = saved?.tracks?.reduce((n, t) => n + (t.clips?.length ?? 0), 0) ?? 0;
     if (saved && clips > 0) setRecover({ updatedAt: saved.updatedAt ?? 'unknown', clips });
-    else if (!localStorage.getItem('cutforge-onboarded')) setOnboard(true);
+    else if (!safeLSGet('cutforge-onboarded')) setOnboard(true);
     import('../services/collab').then(({ subscribe }) => subscribe((p) => {
       const cur = useEditor.getState().project;
       if (p.updatedAt > cur.updatedAt) set({ project: p, selected: null });
@@ -91,7 +92,7 @@ export default function EditorShell() {
             <div className="flex gap-2">
               <button onClick={() => {
                 try {
-                  const raw = localStorage.getItem('cutforge-autosave');
+                  const raw = safeLSGet('cutforge-autosave');
                   if (raw) set({ project: JSON.parse(raw), selected: null, currentTime: 0 });
                 } catch { /* noop */ }
                 setRecover(null);
@@ -113,8 +114,8 @@ export default function EditorShell() {
               <li>Export → 1080p MP4, rendered locally in your browser.</li>
             </ol>
             <div className="flex gap-2">
-              <button onClick={() => { localStorage.setItem('cutforge-onboarded', '1'); setOnboard(false); }} className="bg-violet-500 rounded px-3 py-1 font-bold">Start editing</button>
-              <button onClick={() => { localStorage.setItem('cutforge-onboarded', '1'); setOnboard(false); }} className="bg-[#262a33] rounded px-3 py-1">Load demo from Media → Demo</button>
+              <button onClick={() => { safeLSSet('cutforge-onboarded', '1'); setOnboard(false); }} className="bg-violet-500 rounded px-3 py-1 font-bold">Start editing</button>
+              <button onClick={() => { safeLSSet('cutforge-onboarded', '1'); setOnboard(false); }} className="bg-[#262a33] rounded px-3 py-1">Load demo from Media → Demo</button>
             </div>
           </div>
         </div>

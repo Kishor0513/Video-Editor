@@ -5,6 +5,8 @@ import { validateFile } from '../services/security';
 import { track } from '../services/analytics';
 import { FXPanel, CaptionsPanel, TemplatesPanel, AudioPanel, StickersPanel, TransitionsPanel, FiltersPanel, AdjustPanel } from './ProPanels';
 import { DEMO_FILES, fetchDemoFile, buildReel, buildYoutube } from '../services/demo';
+import { safeLSGet, safeLSSet } from '../services/storage';
+import { BUILD_ID } from '../version';
 import type { Asset, Clip } from '../types';
 
 const LIB_KEY = 'cutforge-library';
@@ -18,6 +20,7 @@ export default function MediaPanel() {
   const set = useEditor((s) => s.set);
   const [tab, setTab] = useState<Tab>('media');
   const [busy, setBusy] = useState('');
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [query, setQuery] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -29,7 +32,7 @@ export default function MediaPanel() {
     setRestored(true);
     (async () => {
       try {
-        const raw = localStorage.getItem(LIB_KEY);
+        const raw = safeLSGet(LIB_KEY);
         if (raw && !useEditor.getState().assets.length) {
           const meta = JSON.parse(raw) as (Omit<Asset, 'url' | 'thumb'> & { thumb?: string })[];
           if (meta.length) {
@@ -56,7 +59,7 @@ export default function MediaPanel() {
         void _url;
         return m;
       });
-      localStorage.setItem(LIB_KEY, JSON.stringify(meta));
+      safeLSSet(LIB_KEY, JSON.stringify(meta));
     } catch { /* quota */ }
   }, [assets]);
 
@@ -92,17 +95,25 @@ export default function MediaPanel() {
           addAsset(a);
           added++;
           void persistBlob(a.id, f);
-          if (a.name.includes('(codec unsupported)')) failures.push(`${f.name}: added but codec may not play in this browser — try MP4 (H.264) / WebM`);
+          if (a.name.includes('(codec unsupported)') || a.name.includes('(preview unsupported')) failures.push(`${f.name}: ${a.name.includes('preview') ? 'metadata read but frames may not preview in this browser — convert to MP4 (H.264) for full support' : 'codec may not play in this browser — try MP4 (H.264) / WebM'}`);
           track('media_uploaded', { kind: f.type || 'unknown' });
         } catch (e) { failures.push(`${f.name}: ${String((e as Error)?.message ?? e)}`); }
       }
       setBusy('');
-      if (failures.length) alert('Import results:\n\n' + failures.join('\n') + (added ? `\n\n${added} file(s) added.` : ''));
+      // Inline status (alerts can be suppressed by the browser) + console for diagnosis
+      if (failures.length || added) {
+        setNotice({ ok: added > 0 && !failures.length, text: [...failures, ...(added ? [`${added} file(s) added to the library.`] : [])].join('\n') });
+        console.info('[import]', { added, failures });
+      } else {
+        setNotice(null);
+      }
       track('clip_added');
       requestAnimationFrame(() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }));
     } catch (e) {
       setBusy('');
-      alert('Import failed unexpectedly: ' + String((e as Error)?.message ?? e) + '\n\nTry a small MP4/JPEG first to isolate the file.');
+      const msg = 'Import failed unexpectedly: ' + String((e as Error)?.message ?? e) + ' — try a small MP4/JPEG first to isolate the file.';
+      setNotice({ ok: false, text: msg });
+      console.error('[import]', e);
     }
   };
 
@@ -185,12 +196,17 @@ export default function MediaPanel() {
             <label
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); void onFiles(e.dataTransfer.files); }}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); const fl = e.dataTransfer.files; if (fl?.length) void onFiles(fl); }}
               className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer mb-2 transition-colors ${dragOver ? 'border-violet-400 bg-violet-500/10 text-white' : 'border-[#2c313b] text-gray-400 hover:border-violet-500/50'}`}>
               <div className="text-sm">📼 {busy || 'Import video / image / audio'}</div>
               <div className="text-[11px] opacity-70 mt-0.5">click or drop files here · MP4/MOV/WebM · MP3/WAV/M4A · PNG/JPEG/WebP · stays in your library</div>
-              <input type="file" multiple accept="video/*,.mkv,.mov,.m4v,.3gp,.ts,.m2ts,image/*,.heic,.heif,.avif,.bmp,audio/*,.m4a,.flac,.aiff,.opus,.wma" className="hidden" onChange={(e) => { const fl = e.target.files; e.target.value = ''; if (fl?.length) void onFiles(fl).catch((err) => alert('Import failed: ' + String((err as Error)?.message ?? err))); }} />
+              <input type="file" multiple accept="video/*,.mkv,.mov,.m4v,.3gp,.ts,.m2ts,image/*,.heic,.heif,.avif,.bmp,audio/*,.m4a,.flac,.aiff,.opus,.wma" className="hidden" onChange={(e) => { const fl = e.target.files; e.target.value = ''; if (fl?.length) void onFiles(fl); }} />
             </label>
+            {notice && (
+              <div className={`rounded-lg p-2 mb-2 text-[11px] whitespace-pre-line border ${notice.ok ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-red-500/10 text-red-300 border-red-500/30'}`} role="status">
+                {notice.text}
+              </div>
+            )}
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search library…" className="w-full bg-[#1d2027] rounded p-1.5 mb-2 text-xs" aria-label="Search media" />
             {!assets.length && !busy && (
               <p className="text-[11px] text-gray-500 text-center py-4">Library empty — import files above.<br />They persist across reloads.</p>
@@ -248,10 +264,10 @@ export default function MediaPanel() {
         {tab === 'filters' && <FiltersPanel />}
         {tab === 'adjust' && <AdjustPanel />}
       </div>
-      {tab === 'media' && assets.length > 0 && (
+      {tab === 'media' && (
         <div className="px-2 py-1.5 border-t border-[#2c313b] text-[11px] text-gray-400 flex justify-between">
-          <span>{assets.length} file{assets.length === 1 ? '' : 's'} · {totalDuration(useEditor.getState().project).toFixed(1)}s timeline</span>
-          <span className="text-gray-500">drag → timeline</span>
+          <span>{assets.length} file{assets.length === 1 ? '' : 's'}{assets.length ? ` · ${totalDuration(useEditor.getState().project).toFixed(1)}s timeline` : ''}</span>
+          <span className="text-gray-500" title="Running bundle — compare after hard-refresh">build {BUILD_ID}</span>
         </div>
       )}
       </div>

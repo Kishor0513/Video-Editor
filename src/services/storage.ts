@@ -28,6 +28,14 @@ export async function saveVersion(p: Project) {
 }
 export async function listVersions(id: string) { return (await idbGet<Project[]>('versions:' + id)) ?? []; }
 
+// ---- Safe localStorage (throws when site data is blocked — never crash the app) ----
+export function safeLSGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+export function safeLSSet(key: string, val: string): void {
+  try { localStorage.setItem(key, val); } catch { /* blocked: session-only */ }
+}
+
 // ---- Media library persistence (IndexedDB blobs, survives reload) ----
 const ADB = 'cutforge-assets';
 function adb(): Promise<IDBDatabase> {
